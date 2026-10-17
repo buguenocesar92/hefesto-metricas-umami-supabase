@@ -1,0 +1,5 @@
+evento,cuando,nota
+solicitar_cotizacion,Clic en CTA de cotizacion,Mide intencion no cotizacion enviada
+abrir_whatsapp,Clic en enlace WhatsApp,No confirma conversacion ni venta
+formulario_enviado,Respuesta exitosa del backend,Emitir una sola vez tras confirmar guardado
+compra_confirmada,Pedido confirmado por backend,No usar clic de pagar como venta

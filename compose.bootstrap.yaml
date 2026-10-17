@@ -1,0 +1,6 @@
+services:
+  app:
+    restart: "no"
+    ports: ["127.0.0.1:8097:3000"]
+    environment:
+      HEFESTO_BOOTSTRAP: "true"

@@ -1,0 +1,60 @@
+name: hefesto-metricas
+x-pg: &pg
+  PGHOST: ${DB_HOST:?Configurar host}
+  PGPORT: "5432"
+  PGDATABASE: postgres
+  PGUSER: ${DB_USER:-umami_app}
+  PGPASSWORD: ${DB_PASSWORD:?Configurar clave}
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /certs/ca.crt
+  PGCONNECT_TIMEOUT: "15"
+services:
+  preflight:
+    image: postgres:17-alpine
+    restart: "no"
+    environment:
+      <<: *pg
+      SUPABASE_DEDICATED_CONFIRMED: ${SUPABASE_DEDICATED_CONFIRMED:-false}
+      SUPABASE_DATA_API_DISABLED: ${SUPABASE_DATA_API_DISABLED:-false}
+    volumes:
+      - ./certs:/certs:ro
+      - ./ops:/opt/hefesto:ro
+    entrypoint: [sh, /opt/hefesto/preflight.sh]
+  app:
+    image: ghcr.io/umami-software/umami:3.4.0@sha256:85909afc45bdcda1917394594a087421fdbb05610fded0fa9f6fb861abb2f367
+    init: true
+    restart: unless-stopped
+    depends_on:
+      preflight:
+        condition: service_completed_successfully
+    command: [node, /app/hefesto/start.mjs]
+    environment:
+      HEFESTO_DB_HOST: ${DB_HOST}
+      HEFESTO_DB_USER: ${DB_USER:-umami_app}
+      HEFESTO_DB_PASSWORD: ${DB_PASSWORD}
+      HEFESTO_BOOTSTRAP: "false"
+      APP_SECRET: ${APP_SECRET:?Generar secreto}
+      TWO_FACTOR_ENCRYPTION_KEY: ${TWO_FACTOR_ENCRYPTION_KEY:?Generar clave 2FA}
+      NEXT_TELEMETRY_DISABLED: "1"
+      TZ: UTC
+    expose: ["3000"]
+    volumes:
+      - ./certs:/certs:ro
+      - ./ops:/app/hefesto:ro
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:3000/api/heartbeat]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+  dbtools:
+    image: postgres:17-alpine
+    profiles: [tools]
+    environment: *pg
+    volumes:
+      - ./certs:/certs:ro
+      - ./ops:/opt/hefesto:ro

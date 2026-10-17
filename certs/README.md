@@ -1,0 +1,1 @@
+Descargue la CA vigente del proyecto Supabase como ca.crt, permisos 0644 y directorio 0755. Debe poder leerla UID 1001 de Umami. Runtime usa node-postgres verify-full/sslrootcert; migraciones Prisma usan require/sslaccept=strict/sslcert; psql y backups usan verify-full. No desactive la validación para resolver errores.
