@@ -32,6 +32,9 @@ services:
       HEFESTO_DB_HOST: ${DB_HOST}
       HEFESTO_DB_USER: ${DB_USER:-umami_app}
       HEFESTO_DB_PASSWORD: ${DB_PASSWORD}
+      HEFESTO_DB_NAME: ${DB_NAME:-postgres}
+      HEFESTO_DB_SSLMODE: ${DB_SSLMODE:-verify-full}
+      PGSSLROOTCERT: ${PGSSLROOTCERT:-/certs/ca.crt}
       HEFESTO_BOOTSTRAP: "false"
       APP_SECRET: ${APP_SECRET:?Generar secreto}
       TWO_FACTOR_ENCRYPTION_KEY: ${TWO_FACTOR_ENCRYPTION_KEY:?Generar clave 2FA}

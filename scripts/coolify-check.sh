@@ -64,6 +64,38 @@ check_contract() {
         failures+=("raiz:name-fijo")
     fi
 
+    # 2.2: name fijo en redes y volumenes del archivo fuente. Coolify asigna
+    # el nombre de proyecto y exige que ${VOLUME_PREFIX} quede con valor por
+    # defecto; cualquier red/volumen con name explicito falla el contrato.
+    local name_failures
+    name_failures="$(awk '
+        /^networks:/ { section="networks"; in_item=""; next }
+        /^volumes:/ { section="volumes"; in_item=""; next }
+        /^[a-zA-Z_]/ { section=""; in_item=""; next }
+        section != "" && /^  [A-Za-z0-9_.-]+:$/ {
+            in_item = $1; sub(/:$/, "", in_item); next
+        }
+        section != "" && /^    name:/ {
+            value = $0
+            sub(/^    name:[[:space:]]*/, "", value)
+            gsub(/^["\047]/, "", value)
+            gsub(/["\047]$/, "", value)
+            if (value !~ /^\$\{/) {
+                if (section == "networks") print "red:" in_item ":name-fijo"
+                else print "volumen:" in_item ":name-fijo"
+            }
+            next
+        }
+    ' "$repo_root/$compose_file")" || {
+        echo "servicio: awk fallo chequeando name en redes y volumenes" >&2
+        return 1
+    }
+    if [ -n "$name_failures" ]; then
+        while IFS= read -r line; do
+            failures+=("$line")
+        done <<< "$name_failures"
+    fi
+
     # 2.2: campos prohibidos en servicios sin profiles.
     local bad_fields
     bad_fields="$(printf '%s' "$json" | jq -r '
@@ -141,14 +173,44 @@ check_contract() {
     fi
 }
 
-# Verifica que el render con DB_SSLMODE=disable y DB_NAME=mvp_prueba los contiene
-# en los entornos resueltos de los servicios sin profiles (PGDATABASE/PGSSLMODE
-# del preflight). Falla si jq no puede parsear o si las variables no fluyen.
+# Verifica que el render con DB_SSLMODE=disable y DB_NAME=mvp_prueba los
+# contiene en el entorno del servicio web (HEFESTO_DB_NAME/HEFESTO_DB_SSLMODE de
+# app) y, ademas, en el preflight (PGDATABASE/PGSSLMODE). Falla si jq no puede
+# parsear o si las variables no fluyen.
 check_supabase_pg() {
     local json="$1" rc
+
     printf '%s' "$json" | jq -e '
         [.services | to_entries[]
-         | select((.value.profiles // []) | length == 0)
+         | select(.key == "app")
+         | .value.environment // {}
+         | to_entries[]
+         | select(.key == "HEFESTO_DB_NAME" and .value == "mvp_prueba")]
+        | length > 0
+    ' >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "supabase-pg: DB_NAME=mvp_prueba no llega al servicio app (HEFESTO_DB_NAME)" >&2
+        return 1
+    fi
+
+    printf '%s' "$json" | jq -e '
+        [.services | to_entries[]
+         | select(.key == "app")
+         | .value.environment // {}
+         | to_entries[]
+         | select(.key == "HEFESTO_DB_SSLMODE" and .value == "disable")]
+        | length > 0
+    ' >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "supabase-pg: DB_SSLMODE=disable no llega al servicio app (HEFESTO_DB_SSLMODE)" >&2
+        return 1
+    fi
+
+    printf '%s' "$json" | jq -e '
+        [.services | to_entries[]
+         | select(.key == "preflight")
          | .value.environment // {}
          | to_entries[]
          | select(.key == "PGDATABASE" and .value == "mvp_prueba")]
@@ -156,13 +218,13 @@ check_supabase_pg() {
     ' >/dev/null 2>&1
     rc=$?
     if [ "$rc" -ne 0 ]; then
-        echo "supabase-pg: DB_NAME=mvp_prueba no llega al entorno del servicio" >&2
+        echo "supabase-pg: DB_NAME=mvp_prueba no llega al entorno del preflight (PGDATABASE)" >&2
         return 1
     fi
 
     printf '%s' "$json" | jq -e '
         [.services | to_entries[]
-         | select((.value.profiles // []) | length == 0)
+         | select(.key == "preflight")
          | .value.environment // {}
          | to_entries[]
          | select(.key == "PGSSLMODE" and .value == "disable")]
@@ -170,7 +232,7 @@ check_supabase_pg() {
     ' >/dev/null 2>&1
     rc=$?
     if [ "$rc" -ne 0 ]; then
-        echo "supabase-pg: DB_SSLMODE=disable no llega al entorno del servicio" >&2
+        echo "supabase-pg: DB_SSLMODE=disable no llega al entorno del preflight (PGSSLMODE)" >&2
         return 1
     fi
 }
