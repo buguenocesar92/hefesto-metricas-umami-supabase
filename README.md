@@ -30,10 +30,21 @@ Coolify publica el dominio vía Traefik y no expone puertos propios, por lo que 
 
 1. **Crear la base propia en el Postgres compartido de Supabase.** Conéctese al proyecto y cree la base `mvp_hefesto_metricas_umami_supabase` (o el slug acordado). El rol `umami_app` ya debe existir y tener asignada la clave de `DB_PASSWORD`.
 2. **Ejecutar `sql/01-supabase-app.sql` conectado a esa base.** El script fija `DATABASE postgres` en `GRANT CONNECT` y en los `ALTER ROLE ... IN DATABASE`; antes de correrlo reemplace `postgres` por el nombre real de `DB_NAME`. Si lo deja en `postgres`, el rol no tendrá permisos en su base y `ops/preflight.sql` fallará con «Faltan permisos» o se rechazará la conexión.
-3. **Cambiar la contraseña de la cuenta `admin` por defecto antes del primer despliegue público.** La imagen crea un usuario `admin` con clave `umami`; `ops/guard.mjs:11-12` bloquea el arranque mientras esa clave siga activa. En Coolify no se puede levantar `compose.bootstrap.yaml` (publica un puerto). Hágalo así:
-   - Levante una base temporal local con `bash scripts/backup.py` o un Postgres propio, importe `mvp_hefesto_metricas_umami_supabase` con `bash scripts/restore_db.py`, cambie la clave (`/api/auth/change-password` o el panel de Umami), exporte el SQL actualizado y restáurelo en la base compartida.
-   - Como alternativa operativa: haga el cambio dentro del propio Supabase mediante `psql` contra `mvp_hefesto_metricas_umami_supabase`, aplicando el hash que devuelve `bcrypt.hash(contraseña, 10)` sobre `public."user"."passwordHash"` de la cuenta `admin` (revise el nombre exacto de la columna en la migración nativa de Umami 3.4.0 antes de ejecutarlo).
-   Documente el procedimiento elegido y conserve la nueva clave fuera del repo.
+3. **Cambiar la contraseña de la cuenta `admin` antes de publicar.** Las migraciones de Umami crean `admin` / `umami`. `ops/start.mjs` corre las migraciones y después `ops/guard.mjs`, que detiene el arranque **antes de servir HTTP** mientras alguna cuenta conserve esa clave. Por eso el primer despliegue en Coolify deja la base migrada sin exponer el panel:
+   1. Despliegue en Coolify. En los logs de `app` debe aparecer `Cambie la contraseña inicial usando el bootstrap privado antes de publicar` y el contenedor se reinicia. Es lo esperado.
+   2. En una máquina con Docker, genere el hash bcrypt de la nueva clave con la misma imagen fijada en `compose.yaml` (la clave se lee por stdin y no queda en el historial):
+      ```bash
+      read -rsp 'Nueva clave admin: ' P; echo
+      printf '%s' "$P" | docker run --rm -i --entrypoint node ghcr.io/umami-software/umami:3.4.0@sha256:85909afc45bdcda1917394594a087421fdbb05610fded0fa9f6fb861abb2f367 -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(require('bcryptjs').hashSync(s,10)))"
+      unset P
+      ```
+   3. Con `psql` conectado a la base `DB_NAME` como `umami_app` (dueño de las tablas) o como administrador, aplique el hash (reemplace `<HASH>` por la salida anterior, entre comillas simples):
+      ```sql
+      UPDATE public."user" SET password = '<HASH>' WHERE username = 'admin';
+      ```
+      Debe responder `UPDATE 1`.
+   4. Vuelva a desplegar en Coolify. En los logs de `app` debe aparecer `Comprobacion de cuenta inicial completada` y luego el servidor inicia. Entre al panel, cree su cuenta nominativa si corresponde y configure 2FA.
+   Conserve la nueva clave fuera del repo.
 4. **Definir las variables obligatorias en Coolify.** El despliegue no arranca sin:
    - `SUPABASE_DEDICATED_CONFIRMED=true` y `SUPABASE_DATA_API_DISABLED=true` (exigidas por `ops/preflight.sh:3-4`).
    - `DB_NAME`, `DB_USER` (solo si el rol no es `umami_app`), `DB_PASSWORD`, `DB_HOST`, `APP_SECRET`, `TWO_FACTOR_ENCRYPTION_KEY`.

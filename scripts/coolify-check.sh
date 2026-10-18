@@ -259,6 +259,11 @@ main() {
     fi
 
     rm -f "$env_default" "$env_disable"
+    if [ "$exit_code" -eq 0 ]; then
+        echo "coolify-check: OK"
+    else
+        echo "coolify-check: FALLA" >&2
+    fi
     exit "$exit_code"
 }
 
