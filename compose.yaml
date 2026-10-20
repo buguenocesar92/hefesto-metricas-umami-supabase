@@ -1,12 +1,12 @@
-name: hefesto-metricas
+# Coolify asigna el nombre de proyecto via COMPOSE_PROJECT_NAME; sin fallback fijo.
 x-pg: &pg
   PGHOST: ${DB_HOST:?Configurar host}
   PGPORT: "5432"
-  PGDATABASE: postgres
+  PGDATABASE: ${DB_NAME:-postgres}
   PGUSER: ${DB_USER:-umami_app}
   PGPASSWORD: ${DB_PASSWORD:?Configurar clave}
-  PGSSLMODE: verify-full
-  PGSSLROOTCERT: /certs/ca.crt
+  PGSSLMODE: ${DB_SSLMODE:-verify-full}
+  PGSSLROOTCERT: ${PGSSLROOTCERT:-/certs/ca.crt}
   PGCONNECT_TIMEOUT: "15"
 services:
   preflight:
@@ -32,6 +32,9 @@ services:
       HEFESTO_DB_HOST: ${DB_HOST}
       HEFESTO_DB_USER: ${DB_USER:-umami_app}
       HEFESTO_DB_PASSWORD: ${DB_PASSWORD}
+      HEFESTO_DB_NAME: ${DB_NAME:-postgres}
+      HEFESTO_DB_SSLMODE: ${DB_SSLMODE:-verify-full}
+      PGSSLROOTCERT: ${PGSSLROOTCERT:-/certs/ca.crt}
       HEFESTO_BOOTSTRAP: "false"
       APP_SECRET: ${APP_SECRET:?Generar secreto}
       TWO_FACTOR_ENCRYPTION_KEY: ${TWO_FACTOR_ENCRYPTION_KEY:?Generar clave 2FA}
