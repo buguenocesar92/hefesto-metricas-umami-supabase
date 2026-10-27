@@ -10,7 +10,7 @@ x-pg: &pg
   PGCONNECT_TIMEOUT: "15"
 services:
   preflight:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: "no"
     environment:
       <<: *pg
@@ -55,7 +55,7 @@ services:
         max-size: 10m
         max-file: "3"
   dbtools:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     profiles: [tools]
     environment: *pg
     volumes:
